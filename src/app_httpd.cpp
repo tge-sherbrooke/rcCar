@@ -28,31 +28,15 @@ Adafruit_NeoPixel pixels(NEOPIXEL_NUMBER, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 extern String ssid;
 static bool ledState = false;
 
+int batteryPercentage = 100; // Placeholder for battery percentage
+
 // Placeholder for functions
-int getBatteryPercentage();
+void updateBatteryPercentage();
+void updateNeoPixelColor();
 void initLITTLEFS();
 void startCameraServer(void);
-
 void rcCar_setup();
-
 void rcCar_stop();
-void rcCar_fwd();
-void rcCar_bwd();
-void rcCar_left();
-void rcCar_right();
-
-void rcCar_upRight();
-void rcCar_upLeft();
-void rcCar_downRight();
-void rcCar_downLeft();
-
-typedef struct {
-  size_t size; //number of values used for filtering
-  size_t index; //current value index
-  size_t count; //value count
-  int sum;
-  int *values; //array to be filled with values
-} ra_filter_t;
 
 typedef struct {
   httpd_req_t *req;
@@ -64,7 +48,6 @@ static const char *_STREAM_CONTENT_TYPE = "multipart/x-mixed-replace;boundary=" 
 static const char *_STREAM_BOUNDARY = "\r\n--" PART_BOUNDARY "\r\n";
 static const char *_STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %u\r\n\r\n";
 
-static ra_filter_t ra_filter;
 httpd_handle_t stream_httpd = NULL;
 httpd_handle_t camera_httpd = NULL;
 
@@ -326,155 +309,114 @@ static esp_err_t status_handler(httpd_req_t *req)
 }
 
 static esp_err_t index_handler(httpd_req_t *req) {
-  
-  httpd_resp_set_type(req, "text/html");
-  String page = "";
-  // Meta tag and viewport settings
-  page += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0\">\n";
+    httpd_resp_set_type(req, "text/html");
+    String page = "";
+    // Meta tag and viewport settings
+    page += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0\">\n";
 
-  // CSS to set the background color and button styles
-  page += "<style>";
-  page += "body { background-color: #FFFFFF; }";  // Change the background color here
-  page += "button { color: white; margin: 5px; }";  // Set the text color inside buttons to white and add margin
-  page += "p.bottom-text { text-align: left; margin: 2px 0; }";  // Align bottom text to the left and reduce margin
-  page += ".bottom-container { display: flex; align-items: center; justify-content: center; }";  // Flex container for image and text, align items to the center
-  page += ".bottom-container img { margin-right: 10px; }";  // Margin for the image
-  page += ".bottom-container div { text-align: left; }";  // Align text to the left within the container
-  page += "</style>";
-  
-  // XMLHttpRequest for sending GET requests
-  page += "<script>var xhttp = new XMLHttpRequest();</script>";
-  page += "<script>function getsend(arg) { xhttp.open('GET', arg +'?' + new Date().getTime(), true); xhttp.send() }</script>";
-  
-  // Image stream (adjust to your actual stream URL)
-  page += "<body onload=\"document.getElementById('stream').src=document.location.origin+':81/stream';\">";
-  page += "<div style='text-align:center;'>";
-  page += "<img id='stream' src='' style='width:400px;' crossorigin='anonymous'>"; // Adjust the width as needed
-  page += "</div>";
+    // CSS to set the background color and button styles
+    page += "<style>";
+    page += "body { background-color: #FFFFFF; }";  // Change the background color here
+    page += "button { color: white; margin: 5px; }";  // Set the text color inside buttons to white and add margin
+    page += "p.bottom-text { text-align: left; margin: 2px 0; }";  // Align bottom text to the left and reduce margin
+    page += ".bottom-container { display: flex; align-items: center; justify-content: center; }";  // Flex container for image and text, align items to the center
+    page += ".bottom-container img { margin-right: 10px; }";  // Margin for the image
+    page += ".bottom-container div { text-align: left; }";  // Align text to the left within the container
+    page += "</style>";
+    
+    // XMLHttpRequest for sending GET requests
+    page += "<script>var xhttp = new XMLHttpRequest();</script>";
+    page += "<script>function getsend(arg) { xhttp.open('GET', arg +'?' + new Date().getTime(), true); xhttp.send() }</script>";
+    
+    // Image stream (adjust to your actual stream URL)
+    page += "<body onload=\"document.getElementById('stream').src=document.location.origin+':81/stream';\">";
+    page += "<div style='text-align:center;'>";
+    page += "<img id='stream' src='' style='width:400px;' crossorigin='anonymous'>"; // Adjust the width as needed
+    page += "</div>";
 
-  // Include joy.min.js library
-  page += "<script src=\"/joy.min.js\"></script>";
+    // Include joy.min.js library
+    page += "<script src=\"/joy.min.js\"></script>";
 
-  // Joystick container
-  page += "<div id=\"joystickDiv\" style=\"width: 200px; height: 200px; margin: 0 auto;\"></div>";
+    // Joystick container
+    page += "<div id=\"joystickDiv\" style=\"width: 200px; height: 200px; margin: 0 auto;\"></div>";
 
-  // JavaScript for joystick functionality
-  page += "<script>";
-  page += "  var JoyStick = new JoyStick('joystickDiv', {";
-  page += "    'title': 'joystick',";
-  page += "    'width': 200,";
-  page += "    'height': 200,";
-  page += "    'internalFillColor': ' #82AE32',";
-  page += "    'internalStrokeColor': ' #085C4D',";
-  page += "    'externalStrokeColor': ' #085C4D'";
-  page += "  });";
-  /*
-  // Function to send commands to the ESP32
-  page += "  function sendJoystickCommand(command) {";
-  page += "    let xhttp = new XMLHttpRequest();";
-  page += "    xhttp.open('GET', command, true);";
-  page += "    xhttp.send();";
-  page += "  }"; */
+    // JavaScript for joystick functionality
+    page += "<script>";
+    page += "  var JoyStick = new JoyStick('joystickDiv', {";
+    page += "    'title': 'joystick',";
+    page += "    'width': 200,";
+    page += "    'height': 200,";
+    page += "    'internalFillColor': ' #82AE32',";
+    page += "    'internalStrokeColor': ' #085C4D',";
+    page += "    'externalStrokeColor': ' #085C4D'";
+    page += "  });";
 
-  // Monitor joystick position and send commands
-  page += "  setInterval(function() {";
-  page += "    let x = JoyStick.GetX();"; // Get X-axis value
-  page += "    let y = JoyStick.GetY();"; // Get Y-axis value";
-  page += "    let xhttp = new XMLHttpRequest();";
-  page += "    xhttp.open('GET', '/joycontrol?x=' + x + '&y=' + y, true);";
-  page += "    xhttp.send();";
-  page += "  }, 100);"; // Check joystick position every 100ms
-  page += "</script>";
+    // Monitor joystick position and send commands
+    page += "  setInterval(function() {";
+    page += "    let x = JoyStick.GetX();"; // Get X-axis value
+    page += "    let y = JoyStick.GetY();"; // Get Y-axis value";
+    page += "    let xhttp = new XMLHttpRequest();";
+    page += "    xhttp.open('GET', '/joycontrol?x=' + x + '&y=' + y, true);";
+    page += "    xhttp.send();";
+    page += "  }, 250);"; // Check joystick position every 250ms
+    page += "</script>";
 
-  // Single LED toggle button
-  page += "<p align=center>";
-  page += "<button id='ledButton' style='background-color: #808080;width:140px;height:40px' onclick='toggleLED()'><b>Lumi&#232res</b></button>";
-  page += "</p>";
+    // Single LED toggle button
+    page += "<p align=center>";
+    page += "<button id='ledButton' style='background-color: #808080;width:140px;height:40px' onclick='toggleLED()'><b>Lumi&#232res</b></button>";
+    page += "</p>";
 
-  // Battery display with span for dynamic updating
-  page += "<p style='text-align:center; color: #5087f5;'>Batterie = <span id='batteryValue'>0</span>%</p>";
+    // Battery display with span for dynamic updating
+    page += "<p style='text-align:center; color: #5087f5;'>Batterie = <span id='batteryValue'>0</span>%</p>";
 
-  // JavaScript to fetch and update battery percentage every 30 seconds
-  page += "<script>";
-  page += "  function updateBattery() {";
-  page += "    let xhttp = new XMLHttpRequest();";
-  page += "    xhttp.onreadystatechange = function() {";
-  page += "      if (this.readyState == 4 && this.status == 200) {";
-  page += "        document.getElementById('batteryValue').innerText = this.responseText;";
-  page += "      }";
-  page += "    };";
-  page += "    xhttp.open('GET', '/battery', true);";
-  page += "    xhttp.send();";
-  page += "  }";
-  page += "  setInterval(updateBattery, 30000);"; // Update every 30 seconds
-  page += "  updateBattery();"; // Initial call to update battery percentage immediately
-  page += "</script>";
+    // JavaScript to fetch and update battery percentage every 30 seconds
+    page += "<script>";
+    page += "  function updateBattery() {";
+    page += "    let xhttp = new XMLHttpRequest();";
+    page += "    xhttp.onreadystatechange = function() {";
+    page += "      if (this.readyState == 4 && this.status == 200) {";
+    page += "        document.getElementById('batteryValue').innerText = this.responseText;";
+    page += "      }";
+    page += "    };";
+    page += "    xhttp.open('GET', '/battery', true);";
+    page += "    xhttp.send();";
+    page += "  }";
+    page += "  setInterval(updateBattery, 30000);"; // Update every 30 seconds
+    page += "  updateBattery();"; // Initial call to update battery percentage immediately
+    page += "</script>";
 
-  // JavaScript function to toggle the LED
-  page += "<script>";
-  page += "var ledState = false;";
-  page += "function toggleLED() {";
-  page += "  ledState = !ledState;";
-  page += "  getsend('/toggle_led');";
-  page += "  document.getElementById('ledButton').style.backgroundColor = ledState ? ' #085C4D' : ' #808080';";
-  page += "}";
-  page += "</script>";
+    // JavaScript function to toggle the LED
+    page += "<script>";
+    page += "var ledState = false;";
+    page += "function toggleLED() {";
+    page += "  ledState = !ledState;";
+    page += "  getsend('/toggle_led');";
+    page += "  document.getElementById('ledButton').style.backgroundColor = ledState ? ' #085C4D' : ' #808080';";
+    page += "}";
+    page += "</script>";
 
-  // Add image and text at the bottom of the page
-  page += "<div class='bottom-container'>";
-  page += "<img src='/logo.png' style='width:70px;height:70px;'>";
-  page += "<div>";
-  page += "<p class='bottom-text' style='color: #085C4D;'>C&#233gep de Sherbrooke</p>";
-  page += "<p class='bottom-text' style='color: #085C4D;'>Technologies du g&#233nie &#233lectrique</p>";
-  page += "<p class='bottom-text' style='color: #FF640A; font-size: 17px; font-weight: bold;'>&#201lectronique Programmable</p>";  // Change the color, size, and weight here
-  page += "</div>";
-  page += "</div>";
-  
-  return httpd_resp_send(req, &page[0], strlen(&page[0]));
+    // Add image and text at the bottom of the page
+    page += "<div class='bottom-container'>";
+    page += "<img src='/logo.png' style='width:70px;height:70px;'>";
+    page += "<div>";
+    page += "<p class='bottom-text' style='color: #085C4D;'>C&#233gep de Sherbrooke</p>";
+    page += "<p class='bottom-text' style='color: #085C4D;'>Technologies du g&#233nie &#233lectrique</p>";
+    page += "<p class='bottom-text' style='color: #FF640A; font-size: 17px; font-weight: bold;'>&#201lectronique Programmable</p>";  // Change the color, size, and weight here
+    page += "</div>";
+    page += "</div>";
+    
+    return httpd_resp_send(req, &page[0], strlen(&page[0]));
 }
 
 // Define the battery handler
 esp_err_t battery_handler(httpd_req_t *req) {
-  int batteryPercentage = getBatteryPercentage();  
+  updateBatteryPercentage(); 
   char batteryStr[4];
   snprintf(batteryStr, sizeof(batteryStr), "%d", batteryPercentage);
   
   // Send the battery percentage as the response
   httpd_resp_send(req, batteryStr, strlen(batteryStr));
   return ESP_OK;
-}
-
-static esp_err_t go_handler(httpd_req_t *req){
-  rcCar_fwd();
-  Serial.println("Go");
-  httpd_resp_set_type(req, "text/html");
-  return httpd_resp_send(req, "OK", 2);
-}
-static esp_err_t back_handler(httpd_req_t *req){
-  rcCar_bwd();
-  Serial.println("Back");
-  httpd_resp_set_type(req, "text/html");
-  return httpd_resp_send(req, "OK", 2);
-}
-
-static esp_err_t left_handler(httpd_req_t *req){
-  rcCar_left();
-  Serial.println("Left");
-  httpd_resp_set_type(req, "text/html");
-  return httpd_resp_send(req, "OK", 2);
-}
-static esp_err_t right_handler(httpd_req_t *req){
-  rcCar_right();
-  Serial.println("Right");
-  httpd_resp_set_type(req, "text/html");
-  return httpd_resp_send(req, "OK", 2);
-}
-
-static esp_err_t stop_handler(httpd_req_t *req){
-  rcCar_stop();
-  Serial.println("Stop");
-  httpd_resp_set_type(req, "text/html");
-  return httpd_resp_send(req, "OK", 2);
 }
 
 static esp_err_t toggle_led_handler(httpd_req_t *req){
@@ -560,8 +502,6 @@ esp_err_t control_handler(httpd_req_t *req) {
         free(buf);
     }
 
-    Serial.printf("Joystick X: %d, Y: %d\n", x, y);
-
     // Disable motors if both X and Y are below 30
     if (abs(x) < 10 && abs(y) < 10) {
         Serial.println("X and Y below threshold, stopping motors");
@@ -571,13 +511,20 @@ esp_err_t control_handler(httpd_req_t *req) {
     }
 
     // Reduce speed when turning
-    float turn_factor = 1.0f - (abs(x) / 100.0f); // Scale down speed based on x value (0 to 1.0)
-    turn_factor = max(0.5f, min(1.0f, turn_factor)); // Clamp turn_factor to a minimum of 50% and a maximum of 100%
+    float turn_factor = 1.0f - pow(abs(x) / 100.0f, 2.0f); // Use a smoother non-linear scaling
+    turn_factor = max(0.9f, min(1.0f, turn_factor)); // Clamp turn_factor to a minimum of 90% and a maximum of 100%
 
     // Map joystick values to PWM duty cycle (-100 to 100)
-    int adjusted_x = (y < 0) ? -x : x; // Adjust x for backward movement
-    int duty_cycle_right = (y - adjusted_x) * turn_factor; // Combine forward/backward (y) and turning (x) for the right motor
-    int duty_cycle_left = (y + adjusted_x) * turn_factor;  // Combine forward/backward (y) and turning (x) for the left motor
+    int adjusted_x = (y < -10) ? -x : x; // Adjust x for backward movement
+
+    // Apply a weighted adjustment to reduce sharpness
+    float weight = 0.5f; // Reduce the influence of x on turning
+    int duty_cycle_right = y - (adjusted_x * weight); // Combine forward/backward (y) and turning (x) for the right motor
+    int duty_cycle_left = y + (adjusted_x * weight);  // Combine forward/backward (y) and turning (x) for the left motor
+
+    // Apply turn_factor to smooth the turning effect
+    duty_cycle_right *= turn_factor;
+    duty_cycle_left *= turn_factor;
 
     // Clamp duty cycles to the range -100 to 100
     duty_cycle_right = max(-100, min(100, duty_cycle_right));
@@ -607,61 +554,6 @@ esp_err_t control_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
-httpd_uri_t upright_uri = {
-    .uri       = "/upright",
-    .method    = HTTP_GET,
-    .handler   = [](httpd_req_t *req) {
-        rcCar_upRight();
-        Serial.println("Up Right");
-        httpd_resp_set_type(req, "text/html");
-        return httpd_resp_send(req, "OK", 2);
-    },
-    .user_ctx  = NULL
-};
-
-httpd_uri_t upleft_uri = {
-    .uri       = "/upleft",
-    .method    = HTTP_GET,
-    .handler   = [](httpd_req_t *req) {
-        rcCar_upLeft();
-        Serial.println("Up Left");
-        httpd_resp_set_type(req, "text/html");
-        return httpd_resp_send(req, "OK", 2);
-    },
-    .user_ctx  = NULL
-};
-
-httpd_uri_t downright_uri = {
-    .uri       = "/downright",
-    .method    = HTTP_GET,
-    .handler   = [](httpd_req_t *req) {
-        rcCar_downRight();
-        Serial.println("Down Right");
-        httpd_resp_set_type(req, "text/html");
-        return httpd_resp_send(req, "OK", 2);
-    },
-    .user_ctx  = NULL
-};
-
-httpd_uri_t downleft_uri = {
-    .uri       = "/downleft",
-    .method    = HTTP_GET,
-    .handler   = [](httpd_req_t *req) {
-        rcCar_downLeft();
-        Serial.println("Down Left");
-        httpd_resp_set_type(req, "text/html");
-        return httpd_resp_send(req, "OK", 2);
-    },
-    .user_ctx  = NULL
-};
-
-httpd_uri_t control_uri = {
-    .uri       = "/joycontrol",
-    .method    = HTTP_GET,
-    .handler   = control_handler,
-    .user_ctx  = NULL
-};
-
 void startCameraServer() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.max_uri_handlers = 32; // Increase the maximum number of URI handlers
@@ -670,41 +562,6 @@ void startCameraServer() {
     .uri       = "/battery",
     .method    = HTTP_GET,
     .handler   = battery_handler,
-    .user_ctx  = NULL
-  };
-
-  httpd_uri_t go_uri = {
-    .uri       = "/go",
-    .method    = HTTP_GET,
-    .handler   = go_handler,
-    .user_ctx  = NULL
-  };
-
-  httpd_uri_t back_uri = {
-    .uri       = "/back",
-    .method    = HTTP_GET,
-    .handler   = back_handler,
-    .user_ctx  = NULL
-  };
-
-  httpd_uri_t stop_uri = {
-    .uri       = "/stop",
-    .method    = HTTP_GET,
-    .handler   = stop_handler,
-    .user_ctx  = NULL
-  };
-
-  httpd_uri_t left_uri = {
-    .uri       = "/left",
-    .method    = HTTP_GET,
-    .handler   = left_handler,
-    .user_ctx  = NULL
-  };
-
-  httpd_uri_t right_uri = {
-    .uri       = "/right",
-    .method    = HTTP_GET,
-    .handler   = right_handler,
     .user_ctx  = NULL
   };
 
@@ -735,6 +592,13 @@ void startCameraServer() {
     .handler   = cmd_handler,
     .user_ctx  = NULL
   };
+
+  httpd_uri_t joycontrol_uri = {
+    .uri       = "/joycontrol",
+    .method    = HTTP_GET,
+    .handler   = control_handler,
+    .user_ctx  = NULL
+};
 
   httpd_uri_t capture_uri = {
     .uri       = "/capture",
@@ -768,22 +632,13 @@ void startCameraServer() {
   if (httpd_start(&camera_httpd, &config) == ESP_OK) {
     httpd_register_uri_handler(camera_httpd, &index_uri);
     httpd_register_uri_handler(camera_httpd, &battery_uri);
-    //httpd_register_uri_handler(camera_httpd, &go_uri); 
-    //httpd_register_uri_handler(camera_httpd, &back_uri); 
-    //httpd_register_uri_handler(camera_httpd, &stop_uri); 
-    //httpd_register_uri_handler(camera_httpd, &left_uri);
-    //httpd_register_uri_handler(camera_httpd, &right_uri);
     httpd_register_uri_handler(camera_httpd, &led_uri);
     httpd_register_uri_handler(camera_httpd, &image_uri);
     httpd_register_uri_handler(camera_httpd, &status_uri);
     httpd_register_uri_handler(camera_httpd, &cmd_uri);
     httpd_register_uri_handler(camera_httpd, &capture_uri);
     httpd_register_uri_handler(camera_httpd, &joyjs_uri);
-    //httpd_register_uri_handler(camera_httpd, &upright_uri);
-    //httpd_register_uri_handler(camera_httpd, &upleft_uri);
-    //httpd_register_uri_handler(camera_httpd, &downright_uri);
-    //httpd_register_uri_handler(camera_httpd, &downleft_uri);
-    httpd_register_uri_handler(camera_httpd, &control_uri);
+    httpd_register_uri_handler(camera_httpd, &joycontrol_uri);
   }
   config.server_port += 1;
   config.ctrl_port += 1;
@@ -812,106 +667,48 @@ void rcCar_setup() {
   mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);
   mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_1, &pwm_config);
 
-  // Initialize the lights pin
-  pinMode(LIGHTS_PIN, OUTPUT);
-
   // Stop the motors initially
   rcCar_stop();
 
+  // Initialize the lights pin
+  pinMode(LIGHTS_PIN, OUTPUT);
+
   // Initialize other components (e.g., Neopixel, battery monitoring)
   pixels.begin();
+  delay(10); // Add a short delay to ensure proper initialization
   pixels.setBrightness(30);
-  pixels.fill(0x00FF00); // Green
+  pixels.fill(0x0000FF); // Blue color for initialization
   pixels.show();
 
   initLITTLEFS();
-  getBatteryPercentage();
+  updateBatteryPercentage();
 }
 
-void rcCar_stop() {
+void rcCar_stop(){
+  Serial.println("Stopping motors");
   mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0); // Stop right forward
   mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, 0); // Stop right backward
   mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_A, 0); // Stop left forward
   mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_B, 0); // Stop left backward
 }
 
-void rcCar_left() {
-  // Turn left at 50% duty cycle
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 50); // Right motor forward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, 0);   // Stop right motor backward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_A, 50); // Left motor forward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_B, 0);   // Stop left motor backward
-}
-
-void rcCar_right() {
-  // Turn right at 50% duty cycle
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0);   // Stop right motor forward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, 50); // Right motor backward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_A, 0);   // Stop left motor forward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_B, 50); // Left motor backward
-}
-
-void rcCar_bwd() {
-  // Backward at 100% duty cycle
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0);   // Stop right motor forward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, 100);  // Right motor backward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_A, 100);  // Left motor forward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_B, 0);   // Stop left motor backward
-}
-
-void rcCar_fwd() {
-  // Forward at 100% duty cycle
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 100);  // Right motor forward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, 0);   // Stop right motor backward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_A, 0);   // Stop left motor forward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_B, 100);  // Left motor backward
-}
-
-void rcCar_upRight() {
-  // Move forward and turn slightly right
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 30);  // Right motor forward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, 0);   // Stop right motor backward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_A, 0);   // Left motor forward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_B, 100);  // Left motor backward
-}
-
-void rcCar_upLeft() {
-  // Move forward and turn slightly left
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 100);  // Right motor forward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, 0);   // Stop right motor backward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_A, 0);   // Left motor forward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_B, 30);  // Left motor backward
-}
-
-void rcCar_downRight() {
-  // Move backward and turn slightly right
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0);   // Stop right motor forward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, 30);  // Right motor backward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_A, 100);  // Left motor forward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_B, 0);   // Stop left motor backward
-}
-
-void rcCar_downLeft() {
-  // Move backward and turn slightly left
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0);   // Stop right motor forward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, 100);  // Right motor backward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_A, 30);  // Left motor forward
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_B, 0);   // Stop left motor backward
-}
-
-int getBatteryPercentage() {
+void updateBatteryPercentage() {
   float voltage = analogRead(ADC_BATTERY_PIN) / 4095.0f * 3.3f * 2 + 0.24f;
   Serial.print("Voltage: ");
   Serial.println(voltage);
   
-  int batteryPercentage = map(voltage * 1000, MIN_VOLTAGE * 1000, MAX_VOLTAGE * 1000, 0, 100);
+  batteryPercentage = map(voltage * 1000, MIN_VOLTAGE * 1000, MAX_VOLTAGE * 1000, 0, 100);
   if (batteryPercentage > 100) batteryPercentage = 100;
   if (batteryPercentage < 0) batteryPercentage = 0;
 
   Serial.print("Battery Percentage: ");
   Serial.println(batteryPercentage);
 
-  if(batteryPercentage <= 20) {
+  updateNeoPixelColor(); // Update the NeoPixel color based on battery percentage}
+}
+
+void updateNeoPixelColor() {
+  if (batteryPercentage <= 20) {
     // turn off the lights if battery is very low
     digitalWrite(LIGHTS_PIN,LOW);
     pixels.fill(0xFF0000); // set color to red
@@ -920,13 +717,12 @@ int getBatteryPercentage() {
   } else if (batteryPercentage <= 50) {
     pixels.fill(0xFFFF00); // set color to yellow
     Serial.println("Neopixel color set to YELLOW");
-    
+  
   } else {
     pixels.fill(0x00FF00);  // set color to green
     Serial.println("Neopixel color set to GREEN");
   }
   pixels.show();
-  return batteryPercentage;
 }
 
 // Initialize LITTLEFS

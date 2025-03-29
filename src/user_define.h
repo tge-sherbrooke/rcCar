@@ -44,7 +44,7 @@
 #define BUTTON_PIN 0
 
 // DEBUG
-#define DEBUG 1
-#define enableCAM 0
+#define DEBUG 0
+#define enableCAM 1
 
 #endif // USER_DEFINE_H

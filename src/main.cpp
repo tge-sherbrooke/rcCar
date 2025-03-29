@@ -77,7 +77,10 @@ void setup() {
       Serial.println();
       digitalWrite(LIGHTS_PIN,HIGH);
       Serial.println("Rebooting ESP...");
-      delay(4000); // Optional delay to allow the message to be sent
+      delay(2000);
+      digitalWrite(LIGHTS_PIN,LOW);
+      delay(2000); // Optional delay to allow the message to be sent
+      digitalWrite(LIGHTS_PIN,HIGH);
       ESP.restart();
     }
 
@@ -127,4 +130,5 @@ void setup() {
 
 void loop() {
   // Web server is running in the background
+  unsigned long currentTime = millis();
 }
