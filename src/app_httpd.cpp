@@ -30,6 +30,8 @@ static bool ledState = false;
 
 int batteryPercentage = 100; // Placeholder for battery percentage
 
+volatile float camera_fps = 0.0; // Placeholder for camera FPS
+
 // Placeholder for functions
 void updateBatteryPercentage();
 void updateNeoPixelColor();
@@ -107,8 +109,12 @@ static esp_err_t stream_handler(httpd_req_t *req){
     uint8_t *_jpg_buf = NULL;
     char *part_buf[64];
     static int64_t last_frame = 0;
+    static int64_t last_fps_time = 0;
+    static int frame_count = 0;
+
     if (!last_frame){
         last_frame = esp_timer_get_time();
+        last_fps_time = last_frame;
     }
 
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
@@ -118,6 +124,7 @@ static esp_err_t stream_handler(httpd_req_t *req){
     }
 
     while (true){
+        int64_t frame_start = esp_timer_get_time();
         fb = esp_camera_fb_get();
         if (!fb){
             Serial.println("Camera capture failed");
@@ -157,6 +164,15 @@ static esp_err_t stream_handler(httpd_req_t *req){
         }
         if (res != ESP_OK){
             break;
+        }
+
+        // FPS calculation
+        frame_count++;
+        int64_t now = esp_timer_get_time();
+        if (now - last_fps_time > 1000000) { // 1 second
+            camera_fps = frame_count * 1000000.0f / (now - last_fps_time);
+            frame_count = 0;
+            last_fps_time = now;
         }
     }
 
@@ -330,9 +346,26 @@ static esp_err_t index_handler(httpd_req_t *req) {
     
     // Image stream (adjust to your actual stream URL)
     page += "<body onload=\"document.getElementById('stream').src=document.location.origin+':81/stream';\">";
-    page += "<div style='text-align:center;'>";
-    page += "<img id='stream' src='' style='width:400px;' crossorigin='anonymous'>"; // Adjust the width as needed
+    page += "<div style='position:relative; display:inline-block; text-align:left;'>";
+    page += "  <img id='stream' src='' style='width:400px;' crossorigin='anonymous'>";
+    page += "  <div id='fpsOverlay' style='position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.5); color:#fff; padding:4px 10px; border-radius:8px; font-size:18px; font-family:monospace;'>FPS: <span id='fpsValue'>0.0</span></div>";
     page += "</div>";
+
+    // FPS display with span for dynamic updating
+    page += "<script>";
+    page += "  function updateFPS() {";
+    page += "    var xhttp = new XMLHttpRequest();";
+    page += "    xhttp.onreadystatechange = function() {";
+    page += "      if (this.readyState == 4 && this.status == 200) {";
+    page += "        document.getElementById('fpsValue').innerText = this.responseText;";
+    page += "      }";
+    page += "    };";
+    page += "    xhttp.open('GET', '/fps', true);";
+    page += "    xhttp.send();";
+    page += "  }";
+    page += "  setInterval(updateFPS, 1000);";
+    page += "  updateFPS();";
+    page += "</script>";
 
     // Include joy.min.js library
     page += "<script src=\"/joy.min.js\"></script>";
@@ -554,6 +587,14 @@ esp_err_t control_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
+esp_err_t fps_handler(httpd_req_t *req) {
+    char fpsStr[8];
+    snprintf(fpsStr, sizeof(fpsStr), "%.1f", camera_fps);
+    httpd_resp_set_type(req, "text/plain");
+    httpd_resp_send(req, fpsStr, strlen(fpsStr));
+    return ESP_OK;
+}
+
 void startCameraServer() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.max_uri_handlers = 32; // Increase the maximum number of URI handlers
@@ -628,6 +669,13 @@ void startCameraServer() {
     .user_ctx  = NULL
   };
 
+  httpd_uri_t fps_uri = {
+        .uri       = "/fps",
+        .method    = HTTP_GET,
+        .handler   = fps_handler,
+        .user_ctx  = NULL
+    };
+
   Serial.printf("Starting web server on port: '%d'\n", config.server_port);
   if (httpd_start(&camera_httpd, &config) == ESP_OK) {
     httpd_register_uri_handler(camera_httpd, &index_uri);
@@ -639,6 +687,7 @@ void startCameraServer() {
     httpd_register_uri_handler(camera_httpd, &capture_uri);
     httpd_register_uri_handler(camera_httpd, &joyjs_uri);
     httpd_register_uri_handler(camera_httpd, &joycontrol_uri);
+    httpd_register_uri_handler(camera_httpd, &fps_uri);
   }
   config.server_port += 1;
   config.ctrl_port += 1;
