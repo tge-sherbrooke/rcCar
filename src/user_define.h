@@ -20,23 +20,21 @@
 #define HREF_GPIO_NUM     5
 #define PCLK_GPIO_NUM     13
 
-// Micro SD card pins
-#define uSD_SCK_PIN 4
-#define uSD_CIPO_PIN 8
-#define uSD_COPI_PIN 9
-#define uSD_CS_PIN 21
+// Unsued pins
+#define GPIO07 7
+#define GPIO08 8
 
 // Board IOs
 #define NEOPIXEL_PIN 4
 #define NEOPIXEL_NUMBER 1
 #define ADC_BATTERY_PIN 1
-#define LIGHTS_PIN 45
+#define LIGHTS_PIN 43
 #define MAX_VOLTAGE 4.2  // Maximum expected battery voltage (adjust according to your battery)
 #define MIN_VOLTAGE 3.5  // Minimum acceptable battery voltage (adjust according to your battery)
 
 // Motors pins
 #define RIGHT_MOTOR_FWD 2
-#define RIGHT_MOTOR_BWD 43 
+#define RIGHT_MOTOR_BWD 45 
 #define LEFT_MOTOR_FWD 44
 #define LEFT_MOTOR_BWD 42
 
